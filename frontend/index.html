@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic RAG Assistant — Production</title>
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --surface2: #1c2128; --border: #30363d;
+      --mint: #7ee8a2; --blue: #58a6ff; --amber: #e3b341; --red: #f85149;
+      --purple: #bc8cff; --text: #e6edf3; --muted: #8b949e; --green: #3fb950;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    header h1 { font-size: 16px; font-weight: 600; color: var(--mint); }
+    header .badge { font-size: 11px; background: #1f3a2d; color: var(--mint); border: 1px solid #2d5a3e; padding: 2px 8px; border-radius: 12px; }
+    .nav-links { margin-left: auto; display: flex; gap: 8px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; transition: all .2s; }
+    .nav-links a:hover { color: var(--text); border-color: var(--blue); }
+    .layout { display: grid; grid-template-columns: 320px 1fr 340px; gap: 0; flex: 1; overflow: hidden; }
+
+    /* Left Panel */
+    .left-panel { border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+    .panel-section { padding: 16px; border-bottom: 1px solid var(--border); }
+    .panel-section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 12px; }
+    .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: all .2s; }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--mint); background: #0f2a1e; }
+    .upload-zone .icon { font-size: 28px; margin-bottom: 8px; }
+    .upload-zone p { color: var(--muted); font-size: 13px; }
+    .upload-zone strong { color: var(--mint); }
+    input[type=file] { display: none; }
+    .strategy-select { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 13px; }
+    .chunk-row { display: flex; gap: 8px; margin-top: 8px; }
+    .chunk-row input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 12px; }
+    .btn { background: var(--mint); color: #0d1117; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .2s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn:hover { filter: brightness(1.1); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-full { width: 100%; justify-content: center; margin-top: 10px; }
+    .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-secondary:hover { border-color: var(--blue); color: var(--blue); }
+    .file-list { margin-top: 8px; }
+    .file-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface2); border-radius: 6px; margin-bottom: 4px; font-size: 12px; }
+    .file-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-item .status { color: var(--green); font-size: 11px; }
+    .progress-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+    .progress-fill { height: 100%; background: var(--mint); transition: width .3s; border-radius: 2px; }
+    .stat-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+    .stat-row .label { color: var(--muted); }
+    .stat-row .value { color: var(--mint); font-weight: 600; }
+
+    /* Center Panel */
+    .center-panel { display: flex; flex-direction: column; overflow: hidden; }
+    .chat-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .message { max-width: 90%; }
+    .message.user { align-self: flex-end; }
+    .message.assistant { align-self: flex-start; max-width: 95%; }
+    .message-bubble { padding: 12px 16px; border-radius: 12px; line-height: 1.6; }
+    .user .message-bubble { background: #1f3a2d; border: 1px solid #2d5a3e; color: var(--text); border-bottom-right-radius: 4px; }
+    .assistant .message-bubble { background: var(--surface2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .message-meta { font-size: 11px; color: var(--muted); margin-top: 4px; display: flex; gap: 10px; }
+    .score-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    .score-good { background: #1f3a2d; color: var(--green); }
+    .score-warn { background: #2d2000; color: var(--amber); }
+    .score-bad { background: #2d1010; color: var(--red); }
+    .sources-list { margin-top: 8px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+    .sources-list h4 { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .source-item { font-size: 11px; color: var(--blue); display: flex; align-items: center; gap: 4px; padding: 2px 0; }
+    .typing-indicator { display: flex; gap: 4px; align-items: center; padding: 12px 16px; }
+    .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); animation: bounce .8s infinite; }
+    .typing-dot:nth-child(2) { animation-delay: .15s; }
+    .typing-dot:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce { 0%,80%,100% { transform: scale(1); } 40% { transform: scale(1.4); } }
+    .query-bar { padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+    .mode-tabs { display: flex; gap: 4px; }
+    .mode-tab { padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 11px; color: var(--muted); transition: all .2s; }
+    .mode-tab.active { border-color: var(--mint); color: var(--mint); background: #0f2a1e; }
+    .query-input-row { display: flex; gap: 8px; }
+    .query-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px; resize: none; height: 44px; line-height: 1.4; }
+    .query-input:focus { outline: none; border-color: var(--mint); }
+
+    /* Right Panel — Trace */
+    .right-panel { border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+    .trace-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .trace-header h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+    .trace-clear { font-size: 11px; color: var(--muted); cursor: pointer; padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px; }
+    .trace-clear:hover { color: var(--red); border-color: var(--red); }
+    .trace-steps { padding: 8px; }
+    .trace-step { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; position: relative; }
+    .trace-step.active { border-color: var(--mint); background: #0a1f15; }
+    .trace-step.done { border-color: var(--green); opacity: .8; }
+    .step-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .step-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; }
+    .step-icon.active { background: var(--mint); color: #0d1117; }
+    .step-icon.done { background: var(--green); color: #0d1117; }
+    .step-icon.pending { background: var(--border); color: var(--muted); }
+    .step-name { font-size: 12px; font-weight: 600; flex: 1; }
+    .step-time { font-size: 10px; color: var(--muted); }
+    .step-details { font-size: 11px; color: var(--muted); padding-left: 28px; }
+    .step-details .detail-row { display: flex; justify-content: space-between; padding: 1px 0; }
+    .detail-val { color: var(--text); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .state-panel { padding: 8px; border-top: 1px solid var(--border); }
+    .state-panel h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); padding: 4px 0 8px; }
+    .state-var { font-size: 11px; padding: 4px 6px; background: var(--surface2); border-radius: 4px; margin-bottom: 3px; display: flex; justify-content: space-between; gap: 8px; }
+    .state-var .skey { color: var(--purple); }
+    .state-var .sval { color: var(--amber); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 10px; }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+    .workflow-mini { padding: 8px 16px 16px; }
+    .workflow-mini h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; }
+    .wf-node { display: flex; align-items: center; gap: 6px; padding: 5px 0; }
+    .wf-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+    .wf-dot.active { background: var(--mint); box-shadow: 0 0 6px var(--mint); }
+    .wf-dot.done { background: var(--green); }
+    .wf-label { font-size: 11px; color: var(--muted); }
+    .wf-label.active { color: var(--mint); font-weight: 600; }
+    .wf-label.done { color: var(--green); }
+    .wf-arrow { font-size: 10px; color: var(--border); }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 100; animation: slideIn .3s ease; }
+    .toast.success { border-color: var(--green); color: var(--green); }
+    .toast.error { border-color: var(--red); color: var(--red); }
+    @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+    .welcome { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .welcome h2 { font-size: 20px; color: var(--text); margin-bottom: 8px; }
+    .welcome p { margin-bottom: 16px; line-height: 1.6; }
+    .suggestion-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+    .chip { padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; cursor: pointer; font-size: 12px; transition: all .2s; }
+    .chip:hover { border-color: var(--mint); color: var(--mint); }
+    .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+    .tag-rag { background: #1f2d4a; color: var(--blue); }
+    .tag-web { background: #2d2200; color: var(--amber); }
+    .tag-math { background: #2d1f4a; color: var(--purple); }
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  </style>
+</head>
+<body>
+<header>
+  <div class="icon">🤖</div>
+  <h1>Agentic RAG Assistant</h1>
+  <span class="badge">Production</span>
+  <span class="badge" style="background:#1f2d4a;color:var(--blue);border-color:#2d4a7a;">LangGraph + CRAG + Self-RAG</span>
+  <nav class="nav-links">
+    <a href="/architecture">Architecture Visualizer</a>
+    <a href="/docs" target="_blank">API Docs</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <!-- ── Left Panel: Document Management ── -->
+  <aside class="left-panel">
+    <div class="panel-section">
+      <h3>📄 Document Ingestion</h3>
+      <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📁</div>
+        <p>Drop files here or <strong>click to browse</strong></p>
+        <p style="margin-top:4px;font-size:11px;">PDF, DOCX, TXT, Markdown</p>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,.txt,.md,.docx" multiple />
+
+      <div style="margin-top:12px;">
+        <label style="font-size:11px;color:var(--muted);">Chunking Strategy</label>
+        <select class="strategy-select" id="chunkStrategy">
+          <option value="recursive">Recursive (Recommended)</option>
+          <option value="semantic">Semantic</option>
+          <option value="sentence">Sentence</option>
+          <option value="fixed_size">Fixed Size</option>
+          <option value="markdown">Markdown Headers</option>
+          <option value="paragraph">Paragraph</option>
+        </select>
+      </div>
+      <div class="chunk-row">
+        <div>
+          <label style="font-size:10px;color:var(--muted);">Chunk Size</label>
+          <input type="number" id="chunkSize" value="1000" min="100" max="4000" />
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--muted);">Overlap</label>
+          <input type="number" id="chunkOverlap" value="200" min="0" max="800" />
+        </div>
+      </div>
+      <div id="uploadProgress" style="display:none;">
+        <div class="progress-bar" style="margin-top:8px;"><div class="progress-fill" id="uploadFill" style="width:0%"></div></div>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px;" id="uploadStatus">Uploading...</p>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>📚 Ingested Files</h3>
+      <div class="file-list" id="fileList">
+        <p style="font-size:12px;color:var(--muted);">No files ingested yet</p>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>📊 Statistics</h3>
+      <div class="stat-row"><span class="label">Total Chunks</span><span class="value" id="statChunks">0</span></div>
+      <div class="stat-row"><span class="label">Files Indexed</span><span class="value" id="statFiles">0</span></div>
+      <div class="stat-row"><span class="label">Queries Run</span><span class="value" id="statQueries">0</span></div>
+      <div class="stat-row"><span class="label">Avg Relevance</span><span class="value" id="statRelevance">—</span></div>
+    </div>
+
+    <div class="panel-section">
+      <h3>🔧 Query Settings</h3>
+      <div class="stat-row"><span class="label">Search Alpha</span>
+        <input type="range" id="hybridAlpha" min="0" max="100" value="50" style="width:80px;accent-color:var(--mint);">
+      </div>
+      <div style="font-size:10px;color:var(--muted);text-align:right;margin-top:2px;">
+        <span id="alphaLabel">BM25 ←50%→ Semantic</span>
+      </div>
+      <div class="stat-row" style="margin-top:8px;"><span class="label">Top-K Docs</span>
+        <input type="number" id="topK" value="5" min="1" max="20" style="width:50px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:2px 6px;border-radius:4px;" />
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Center Panel: Chat Interface ── -->
+  <main class="center-panel">
+    <div class="chat-area" id="chatArea">
+      <div class="welcome">
+        <div style="font-size:48px;margin-bottom:12px;">🧠</div>
+        <h2>Agentic RAG Assistant</h2>
+        <p style="max-width:500px;margin:0 auto;">
+          Upload documents and ask questions. The agent uses <strong>Hybrid Search</strong> (BM25 + Semantic),
+          <strong>CRAG</strong>, <strong>Self-RAG</strong>, and <strong>Cross-Encoder Reranking</strong>
+          to deliver grounded, cited answers.
+        </p>
+        <div class="suggestion-chips">
+          <div class="chip" onclick="setQuery('What are the main topics in the uploaded documents?')">📄 Summarize documents</div>
+          <div class="chip" onclick="setQuery('What is machine learning?')">🤖 What is ML?</div>
+          <div class="chip" onclick="setQuery('Calculate sqrt(144) + 2^8')">🧮 Calculate sqrt(144) + 2^8</div>
+          <div class="chip" onclick="setQuery('What are the latest AI developments?')">🌐 Latest AI news</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="query-bar">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="mode-tabs">
+          <div class="mode-tab active" onclick="setMode('auto',this)" data-mode="auto">🤖 Auto</div>
+          <div class="mode-tab" onclick="setMode('vectorstore',this)" data-mode="vectorstore">📚 RAG</div>
+          <div class="mode-tab" onclick="setMode('web_search',this)" data-mode="web_search">🌐 Web</div>
+          <div class="mode-tab" onclick="setMode('general',this)" data-mode="general">💬 Chat</div>
+        </div>
+        <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="streamMode" checked style="accent-color:var(--mint);" />
+          Stream
+        </label>
+      </div>
+      <div class="query-input-row">
+        <textarea class="query-input" id="queryInput" placeholder="Ask anything about your documents..."
+          onkeydown="handleKey(event)" rows="1"></textarea>
+        <button class="btn" id="sendBtn" onclick="sendQuery()">
+          <span id="sendIcon">➤</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Right Panel: Execution Trace ── -->
+  <aside class="right-panel">
+    <div class="trace-header">
+      <h3>⚡ Execution Trace</h3>
+      <span class="trace-clear" onclick="clearTrace()">Clear</span>
+    </div>
+
+    <div class="workflow-mini" id="workflowMini">
+      <h4>Workflow</h4>
+      <div id="workflowNodes">
+        <!-- populated dynamically -->
+      </div>
+    </div>
+
+    <div class="trace-steps" id="traceSteps">
+      <div class="empty-state">
+        <div class="icon">📊</div>
+        <p style="font-size:12px;">Execution steps will appear here when you run a query.</p>
+      </div>
+    </div>
+
+    <div class="state-panel" id="statePanel" style="display:none;">
+      <h4>State Variables</h4>
+      <div id="stateVars"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+const WORKFLOW_NODES = [
+  { id: "understand_query", label: "Understand Query" },
+  { id: "route", label: "Route" },
+  { id: "retrieve", label: "Retrieve (Hybrid)" },
+  { id: "web_search", label: "Web Search" },
+  { id: "calculator", label: "Calculator" },
+  { id: "grade_documents", label: "Grade Documents" },
+  { id: "generate", label: "Generate" },
+  { id: "evaluate", label: "Evaluate" },
+  { id: "rewrite_query", label: "Rewrite Query" },
+  { id: "final_answer", label: "Final Answer" },
+];
+
+let currentMode = "auto";
+let totalChunks = 0, totalFiles = 0, totalQueries = 0;
+let relevanceScores = [];
+let ingestedFiles = [];
+
+// Init workflow display
+function initWorkflow() {
+  const container = document.getElementById("workflowNodes");
+  container.innerHTML = WORKFLOW_NODES.map(n => `
+    <div class="wf-node" id="wf-${n.id}">
+      <div class="wf-dot" id="dot-${n.id}"></div>
+      <span class="wf-label" id="lbl-${n.id}">${n.label}</span>
+    </div>
+  `).join('<div class="wf-node" style="padding:0 0 0 4px;"><span style="font-size:10px;color:var(--border);">↓</span></div>');
+}
+
+function setMode(mode, el) {
+  currentMode = mode;
+  document.querySelectorAll(".mode-tab").forEach(t => t.classList.remove("active"));
+  el.classList.add("active");
+}
+
+function setQuery(q) {
+  document.getElementById("queryInput").value = q;
+  sendQuery();
+}
+
+function handleKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuery(); }
+}
+
+function activateWorkflowNode(nodeId) {
+  WORKFLOW_NODES.forEach(n => {
+    const dot = document.getElementById(`dot-${n.id}`);
+    const lbl = document.getElementById(`lbl-${n.id}`);
+    if (dot && lbl) {
+      dot.classList.remove("active");
+      lbl.classList.remove("active");
+    }
+  });
+  const dot = document.getElementById(`dot-${nodeId}`);
+  const lbl = document.getElementById(`lbl-${nodeId}`);
+  if (dot) { dot.classList.add("active"); lbl.classList.add("active"); }
+}
+
+function completeWorkflowNode(nodeId) {
+  const dot = document.getElementById(`dot-${nodeId}`);
+  const lbl = document.getElementById(`lbl-${nodeId}`);
+  if (dot) { dot.classList.remove("active"); dot.classList.add("done"); lbl.classList.remove("active"); lbl.classList.add("done"); }
+}
+
+function addTraceStep(step) {
+  const container = document.getElementById("traceSteps");
+  if (container.querySelector(".empty-state")) container.innerHTML = "";
+
+  const el = document.createElement("div");
+  el.className = "trace-step active";
+  el.id = `step-${step.node}-${Date.now()}`;
+
+  const details = Object.entries(step)
+    .filter(([k]) => !["node", "timestamp", "state_snapshot"].includes(k))
+    .slice(0, 5)
+    .map(([k, v]) => `<div class="detail-row"><span>${k}</span><span class="detail-val">${typeof v === 'object' ? JSON.stringify(v).slice(0,50) : String(v).slice(0,50)}</span></div>`)
+    .join("");
+
+  el.innerHTML = `
+    <div class="step-header">
+      <div class="step-icon active">▶</div>
+      <span class="step-name">${formatNodeName(step.node)}</span>
+      <span class="step-time">${new Date().toLocaleTimeString()}</span>
+    </div>
+    <div class="step-details">${details}</div>
+  `;
+  container.insertBefore(el, container.firstChild);
+  activateWorkflowNode(step.node);
+}
+
+function completeTraceStep(nodeId) {
+  const step = document.getElementById(`step-${nodeId}`);
+  if (step) {
+    step.classList.remove("active");
+    step.classList.add("done");
+    const icon = step.querySelector(".step-icon");
+    if (icon) { icon.classList.remove("active"); icon.classList.add("done"); icon.textContent = "✓"; }
+  }
+  completeWorkflowNode(nodeId);
+}
+
+function updateStatePanel(stateSnapshot) {
+  const panel = document.getElementById("statePanel");
+  const container = document.getElementById("stateVars");
+  panel.style.display = "block";
+  const important = ["route_decision", "crag_decision", "retry_count", "generation_quality",
+    "hallucination_score", "answer_relevance_score", "self_rag_issup", "self_rag_isuse"];
+  container.innerHTML = Object.entries(stateSnapshot)
+    .filter(([k]) => important.includes(k))
+    .map(([k, v]) => `<div class="state-var"><span class="skey">${k}</span><span class="sval">${String(v).slice(0,40)}</span></div>`)
+    .join("");
+}
+
+function formatNodeName(n) {
+  return n.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+async function sendQuery() {
+  const input = document.getElementById("queryInput");
+  const btn = document.getElementById("sendBtn");
+  const query = input.value.trim();
+  if (!query) return;
+
+  input.value = "";
+  btn.disabled = true;
+  document.getElementById("sendIcon").textContent = "⏳";
+
+  addMessage("user", query);
+  clearTrace();
+  totalQueries++;
+  document.getElementById("statQueries").textContent = totalQueries;
+
+  const streamMode = document.getElementById("streamMode").checked;
+
+  if (streamMode) {
+    await streamQuery(query);
+  } else {
+    await regularQuery(query);
+  }
+
+  btn.disabled = false;
+  document.getElementById("sendIcon").textContent = "➤";
+}
+
+async function regularQuery(query) {
+  const typingEl = addTypingIndicator();
+  try {
+    const resp = await fetch("/api/v1/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, mode: currentMode }),
+    });
+    typingEl.remove();
+    if (!resp.ok) { addMessage("assistant", "Error: " + resp.statusText); return; }
+    const data = await resp.json();
+
+    // Add steps to trace
+    (data.steps || []).forEach(s => { addTraceStep(s); completeTraceStep(s.node); });
+
+    addMessage("assistant", data.answer, {
+      sources: data.sources,
+      hallucination_score: data.hallucination_score,
+      answer_relevance_score: data.answer_relevance_score,
+      route: data.route_decision,
+      retries: data.retry_count,
+    });
+
+    if (data.answer_relevance_score > 0) {
+      relevanceScores.push(data.answer_relevance_score);
+      document.getElementById("statRelevance").textContent =
+        (relevanceScores.reduce((a, b) => a + b, 0) / relevanceScores.length).toFixed(2);
+    }
+  } catch (e) {
+    typingEl.remove();
+    addMessage("assistant", "Connection error: " + e.message);
+  }
+}
+
+async function streamQuery(query) {
+  const msgEl = addStreamingMessage();
+  let fullContent = "";
+  let lastStepTime = {};
+  let metadata = {};
+
+  try {
+    const resp = await fetch("/api/v1/query/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, mode: currentMode, stream: true }),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        try {
+          const evt = JSON.parse(line.slice(6));
+          if (evt.type === "token") {
+            fullContent += evt.content;
+            updateStreamingMessage(msgEl, fullContent);
+          } else if (evt.type === "node_start") {
+            const ts = Date.now();
+            lastStepTime[evt.node] = ts;
+            addTraceStep({ node: evt.node, started_at: new Date(ts).toLocaleTimeString() });
+          } else if (evt.type === "node_end") {
+            (evt.steps || []).forEach(s => updateStatePanel(s.state_snapshot || {}));
+            completeTraceStep(evt.node);
+          } else if (evt.type === "done") {
+            metadata.session_id = evt.session_id;
+          }
+        } catch {}
+      }
+    }
+    finalizeStreamingMessage(msgEl, fullContent, metadata);
+  } catch (e) {
+    updateStreamingMessage(msgEl, "Stream error: " + e.message);
+  }
+}
+
+function addMessage(role, content, meta = {}) {
+  const chat = document.getElementById("chatArea");
+  const el = document.createElement("div");
+  el.className = `message ${role}`;
+
+  let sourcesHtml = "";
+  if (meta.sources && meta.sources.length) {
+    sourcesHtml = `<div class="sources-list">
+      <h4>📎 Sources (${meta.sources.length})</h4>
+      ${meta.sources.map(s => `<div class="source-item">🔗 ${s}</div>`).join("")}
+    </div>`;
+  }
+
+  let scoresHtml = "";
+  if (role === "assistant" && meta.hallucination_score !== undefined) {
+    const hScore = meta.hallucination_score;
+    const aScore = meta.answer_relevance_score;
+    scoresHtml = `
+      <span class="score-badge ${hScore > 0.7 ? 'score-good' : hScore > 0.4 ? 'score-warn' : 'score-bad'}">
+        Grounded: ${(hScore * 100).toFixed(0)}%
+      </span>
+      <span class="score-badge ${aScore > 0.7 ? 'score-good' : aScore > 0.4 ? 'score-warn' : 'score-bad'}">
+        Relevant: ${(aScore * 100).toFixed(0)}%
+      </span>
+      ${meta.route ? `<span class="tag tag-rag">${meta.route}</span>` : ""}
+      ${meta.retries ? `<span style="font-size:11px;color:var(--amber);">↻ ${meta.retries} retries</span>` : ""}
+    `;
+  }
+
+  el.innerHTML = `
+    <div class="message-bubble">${formatMarkdown(content)}</div>
+    ${sourcesHtml}
+    ${role === "assistant" ? `<div class="message-meta">${scoresHtml}</div>` : ""}
+  `;
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+  return el;
+}
+
+function addStreamingMessage() {
+  const chat = document.getElementById("chatArea");
+  const el = document.createElement("div");
+  el.className = "message assistant";
+  el.innerHTML = `<div class="message-bubble" id="streamContent"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`;
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+  return el;
+}
+
+function updateStreamingMessage(el, content) {
+  const bubble = el.querySelector(".message-bubble");
+  if (bubble) { bubble.innerHTML = formatMarkdown(content); }
+  const chat = document.getElementById("chatArea");
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function finalizeStreamingMessage(el, content, meta) {
+  updateStreamingMessage(el, content);
+  const metaEl = document.createElement("div");
+  metaEl.className = "message-meta";
+  metaEl.textContent = meta.session_id ? `Session: ${meta.session_id.slice(0, 8)}...` : "";
+  el.appendChild(metaEl);
+}
+
+function addTypingIndicator() {
+  const chat = document.getElementById("chatArea");
+  const el = document.createElement("div");
+  el.className = "message assistant";
+  el.innerHTML = `<div class="message-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`;
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+  return el;
+}
+
+function clearTrace() {
+  document.getElementById("traceSteps").innerHTML = `<div class="empty-state"><div class="icon">📊</div><p style="font-size:12px;">Execution steps appear here.</p></div>`;
+  document.getElementById("statePanel").style.display = "none";
+  WORKFLOW_NODES.forEach(n => {
+    const dot = document.getElementById(`dot-${n.id}`);
+    const lbl = document.getElementById(`lbl-${n.id}`);
+    if (dot) { dot.className = "wf-dot"; lbl.className = "wf-label"; }
+  });
+}
+
+function formatMarkdown(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(/`(.*?)`/g, "<code style='background:var(--surface2);padding:1px 4px;border-radius:3px;font-family:monospace;'>$1</code>")
+    .replace(/\n\n/g, "<br><br>")
+    .replace(/\n/g, "<br>")
+    .replace(/\[Source (\d+): ([^\]]+)\]/g, "<span class='source-item'>📎 $2</span>");
+}
+
+// ── File Upload ──────────────────────────────────────────────────────────────
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  handleFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener("change", () => handleFiles(Array.from(fileInput.files)));
+
+async function handleFiles(files) {
+  for (const file of files) {
+    await uploadFile(file);
+  }
+}
+
+async function uploadFile(file) {
+  const progress = document.getElementById("uploadProgress");
+  const fill = document.getElementById("uploadFill");
+  const status = document.getElementById("uploadStatus");
+
+  progress.style.display = "block";
+  fill.style.width = "20%";
+  status.textContent = `Uploading ${file.name}...`;
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("chunking_strategy", document.getElementById("chunkStrategy").value);
+  formData.append("chunk_size", document.getElementById("chunkSize").value);
+  formData.append("chunk_overlap", document.getElementById("chunkOverlap").value);
+
+  try {
+    fill.style.width = "60%";
+    const resp = await fetch("/api/v1/ingest/upload", { method: "POST", body: formData });
+    fill.style.width = "100%";
+
+    if (resp.ok) {
+      const data = await resp.json();
+      status.textContent = `✓ ${file.name} — ${data.chunks} chunks`;
+      addIngestedFile(data);
+      showToast(`Ingested: ${data.chunks} chunks from ${file.name}`, "success");
+    } else {
+      const err = await resp.json();
+      status.textContent = `✗ ${err.detail || "Upload failed"}`;
+      showToast(`Failed: ${err.detail}`, "error");
+    }
+  } catch (e) {
+    status.textContent = `✗ ${e.message}`;
+    showToast(`Error: ${e.message}`, "error");
+  } finally {
+    setTimeout(() => { progress.style.display = "none"; fill.style.width = "0%"; }, 2000);
+  }
+}
+
+function addIngestedFile(data) {
+  ingestedFiles.push(data);
+  totalFiles++;
+  totalChunks += data.chunks;
+  document.getElementById("statFiles").textContent = totalFiles;
+  document.getElementById("statChunks").textContent = totalChunks;
+
+  const list = document.getElementById("fileList");
+  if (list.querySelector("p")) list.innerHTML = "";
+  const item = document.createElement("div");
+  item.className = "file-item";
+  item.innerHTML = `
+    <span>📄</span>
+    <span class="name">${data.file}</span>
+    <span class="status">${data.chunks} chunks</span>
+  `;
+  list.appendChild(item);
+}
+
+function showToast(msg, type = "success") {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+document.getElementById("hybridAlpha").addEventListener("input", function() {
+  const v = this.value;
+  document.getElementById("alphaLabel").textContent = `BM25 ←${100-v}% | ${v}%→ Semantic`;
+});
+
+// Init
+initWorkflow();
+</script>
+</body>
+</html>
