@@ -1,27 +1,34 @@
-import uuid
-import logging
+"""Query components for the agentic RAG application."""
+
 import asyncio
 import json
-from typing import Optional, AsyncIterator
+import logging
+import uuid
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
 from ...agents.graph import get_graph
 from ...agents.state import AgentState
-from ...core.config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/query", tags=["query"])
 
 
 class QueryRequest(BaseModel):
+    """Query text and session options supplied by the client."""
+
     query: str = Field(..., min_length=1, max_length=2000)
-    session_id: Optional[str] = None
+    session_id: str | None = None
     stream: bool = False
     mode: str = "auto"  # auto | vectorstore | web_search | general
 
 
 class QueryResponse(BaseModel):
+    """Answer, sources, quality scores, and graph execution steps."""
+
     session_id: str
     query: str
     answer: str
@@ -31,14 +38,14 @@ class QueryResponse(BaseModel):
     retry_count: int = 0
     route_decision: str = ""
     steps: list[dict] = []
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @router.post("", response_model=QueryResponse)
 async def query(request: QueryRequest):
+    """Run a query through the graph and return its answer and sources."""
     session_id = request.session_id or str(uuid.uuid4())
     graph = get_graph()
-    settings = get_settings()
 
     initial_state: AgentState = {
         "query": request.query,
@@ -74,7 +81,9 @@ async def query(request: QueryRequest):
         return QueryResponse(
             session_id=session_id,
             query=request.query,
-            answer=final_state.get("final_answer") or final_state.get("generation") or "No answer generated.",
+            answer=final_state.get("final_answer")
+            or final_state.get("generation")
+            or "No answer generated.",
             sources=final_state.get("sources", []),
             hallucination_score=final_state.get("hallucination_score", 0.0),
             answer_relevance_score=final_state.get("answer_relevance_score", 0.0),
@@ -90,6 +99,7 @@ async def query(request: QueryRequest):
 
 @router.post("/stream")
 async def query_stream(request: QueryRequest):
+    """Stream graph events and answer tokens for a query."""
     session_id = request.session_id or str(uuid.uuid4())
     graph = get_graph()
 
@@ -123,6 +133,7 @@ async def query_stream(request: QueryRequest):
     config = {"configurable": {"thread_id": session_id}}
 
     async def event_stream() -> AsyncIterator[str]:
+        """Yield graph events as server-sent event messages."""
         try:
             async for event in graph.astream_events(initial_state, config=config, version="v1"):
                 event_type = event.get("event", "")
@@ -151,12 +162,16 @@ async def query_stream(request: QueryRequest):
 
 @router.get("/history/{session_id}")
 async def get_session_history(session_id: str):
+    """Return persisted checkpoints for the requested session."""
     try:
         from ...checkpoints.mongodb_saver import get_checkpoint_saver
+
         saver = get_checkpoint_saver()
         if saver:
-            history = saver.get_thread_history(session_id)
-            return {"session_id": session_id, "history": history}
+            history = await asyncio.to_thread(saver.get_thread_history, session_id)
+            from fastapi.encoders import jsonable_encoder
+
+            return jsonable_encoder({"session_id": session_id, "history": history})
     except Exception as e:
         logger.warning(f"Could not fetch history: {e}")
     return {"session_id": session_id, "history": []}

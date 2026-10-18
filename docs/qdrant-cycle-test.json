@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-10-18T15:13:36.157849+00:00",
+  "collection": "agentic_rag_docs",
+  "test_point_id": "d29cceba-feee-4e75-959b-ae58e08a638b",
+  "checks": {
+    "collection_healthy": true,
+    "insert": true,
+    "read_payload": true,
+    "project_semantic_retrieval": true,
+    "test_record_removed": true
+  },
+  "initial_points": 0,
+  "similarity_score": 0.79614997,
+  "retrieved_content": "Diagnostic record d29cceba-feee-4e75-959b-ae58e08a638b. The Aurora research laboratory stores its archive backup every Tuesday at 09:00 UTC. Its retention period is 42 days.",
+  "final_points": 0,
+  "passed": true
+}

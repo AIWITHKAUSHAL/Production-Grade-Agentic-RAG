@@ -1,0 +1,46 @@
+Create a crisp professional 16:9 classroom diagram, high resolution, white background, navy typography, teal ingestion, blue query flow, purple persistence. Title "AGENTIC RAG — CODE CALL MAP & STORAGE". Subtitle "Paths below are relative to backend/app/ unless shown otherwise". Use large readable text, clear arrowheads, generous spacing. Three horizontal panels with exact concise labels.
+
+Panel A "UPLOAD: files → searchable knowledge":
+"frontend/index.html" → "main.py • registers API routes" → "api/routes/ingest.py
+upload_and_ingest()" → "ingestion/pipeline.py
+ingest_file()".
+Below pipeline branch into "document_loader.py
+DocumentLoader.load()" → "chunking.py
+get_chunker() → chunk()" → "Add source / page / file hash". Then "retrieval/vector_store.py
+get_vector_store() → aadd_documents()" → "core/embeddings.py
+embed_documents()" → "Qdrant Cloud
+agentic_rag_docs (default)".
+Small separate branch from chunks "BM25Index.add_documents()
+Ingestion-owned in-memory instance".
+Small amber note "Current code: retrieval uses a separate BM25 singleton; uploaded BM25 chunks are not shared."
+
+Panel B "QUESTION: API → graph → functions":
+"frontend/index.html" → "api/routes/query.py
+query() / query_stream()" → "agents/graph.py
+get_graph() → compile_graph()" → "agents/nodes.py
+understand_query() → route_query()".
+Below nodes show concise distinct branches: "retrieve() → retrieval/hybrid_search.py
+search(): vector + BM25 → rrf.py → reranker.py"; "web_search_node() → agents/tools.py
+web_search()"; "calculator_node() → tools.py
+calculator() → final_answer()"; "general route → generate()".
+Main retrieval/web paths → "grade_documents()
+rag/crag.py + rag/self_rag.py" → "generate()
+core/llm.py → EURI API" → "evaluate_generation()
+rag/grader.py + rag/self_rag.py" → "final_answer() → API → browser".
+Small amber loop text "No evidence / poor quality → rewrite_query() → retrieval or web; default max 3 retries". Avoid ambiguous loop arrow; this can be a clear left-to-right mini-chain.
+Shared small note "agents/state.py: AgentState carries query, docs, answer, scores, retry count and steps".
+
+Panel C "CHECKPOINTS & PHYSICAL STORAGE":
+"query.py: session_id → config.configurable.thread_id" → "graph.py: compile(checkpointer=...)" → "checkpoints/mongodb_saver.py
+get_checkpoint_saver() → MongoDBCheckpointSaver".
+Then purple database "MongoDB URI from MONGODB_URI
+DB: agentic_rag_db
+Collection: checkpoints
+Defaults from core/config.py".
+Example small text "thread_id = class-demo-01 • saved graph state after execution steps".
+Three concise bottom cards:
+"History: GET /api/v1/query/history/{session_id}"
+"Fallback: MongoDB → MemorySaver → no checkpointer"
+"Local Docker: mongo_data volume → /data/db
+Uploads: ./uploads → /app/uploads".
+Footer: "MongoDB stores execution state • Qdrant stores document vectors • LangSmith optionally traces runs". No pretend actual host path or credentials. Clean code diagram, no logos needed.

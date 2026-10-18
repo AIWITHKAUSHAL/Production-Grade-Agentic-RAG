@@ -1,11 +1,15 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field
+"""Config components for the agentic RAG application."""
+
 from functools import lru_cache
-from typing import Optional
+
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # EURI API
+    """Application settings loaded from environment variables and .env."""
+
     euri_api_key: str = Field(..., env="EURI_API_KEY")
     euri_base_url: str = Field("https://api.euron.one/api/v1/euri", env="EURI_BASE_URL")
     euri_model: str = Field("gemini-3.5-flash-lite", env="EURI_MODEL")
@@ -23,12 +27,12 @@ class Settings(BaseSettings):
 
     # LangSmith
     langchain_tracing_v2: bool = Field(True, env="LANGCHAIN_TRACING_V2")
-    langchain_api_key: Optional[str] = Field(None, env="LANGCHAIN_API_KEY")
+    langchain_api_key: str | None = Field(None, env="LANGCHAIN_API_KEY")
     langchain_project: str = Field("production-agentic-rag", env="LANGCHAIN_PROJECT")
     langchain_endpoint: str = Field("https://api.smith.langchain.com", env="LANGCHAIN_ENDPOINT")
 
     # Web Search
-    tavily_api_key: Optional[str] = Field(None, env="TAVILY_API_KEY")
+    tavily_api_key: str | None = Field(None, env="TAVILY_API_KEY")
 
     # Application
     app_host: str = Field("0.0.0.0", env="APP_HOST")
@@ -52,11 +56,14 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 50
 
     class Config:
+        """Configure environment file loading and unknown setting handling."""
+
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
+    """Return cached application settings."""
     return Settings()

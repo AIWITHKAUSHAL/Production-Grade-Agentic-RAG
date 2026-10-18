@@ -1,25 +1,29 @@
-import os
+"""Document loader components for the agentic RAG application."""
+
 import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class RawDocument:
+    """Extracted document text with source and page metadata."""
+
     content: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     source: str
-    page_num: Optional[int] = None
+    page_num: int | None = None
     doc_type: str = "unknown"
 
 
 class DocumentLoader:
     """Multi-strategy document loader using Docling and PyMuPDF."""
 
-    def load(self, file_path: str) -> List[RawDocument]:
+    def load(self, file_path: str) -> list[RawDocument]:
+        """Load a file using the reader for its extension."""
         path = Path(file_path)
         ext = path.suffix.lower()
         if ext == ".pdf":
@@ -33,7 +37,8 @@ class DocumentLoader:
         else:
             return self._load_txt(path)
 
-    def _load_pdf(self, path: Path) -> List[RawDocument]:
+    def _load_pdf(self, path: Path) -> list[RawDocument]:
+        """Read PDF pages with Docling or the PyMuPDF fallback."""
         docs = []
         # Try Docling first (best quality)
         try:
@@ -53,9 +58,9 @@ class DocumentLoader:
 
         return docs
 
-    def _load_pdf_docling(self, path: Path) -> List[RawDocument]:
+    def _load_pdf_docling(self, path: Path) -> list[RawDocument]:
+        """Extract PDF text and page metadata using Docling."""
         from docling.document_converter import DocumentConverter
-        from docling.datamodel.base_models import InputFormat
 
         converter = DocumentConverter()
         result = converter.convert(str(path))
@@ -84,32 +89,37 @@ class DocumentLoader:
                 "loader": "docling",
                 "file_type": "pdf",
             }
-            docs.append(RawDocument(
-                content=page_content.strip(),
-                metadata=metadata,
-                source=path.name,
-                page_num=page_num,
-                doc_type="pdf",
-            ))
+            docs.append(
+                RawDocument(
+                    content=page_content.strip(),
+                    metadata=metadata,
+                    source=path.name,
+                    page_num=page_num,
+                    doc_type="pdf",
+                )
+            )
 
         # Fallback: full document if page extraction failed
         if not docs:
             full_text = doc.export_to_markdown()
             if full_text.strip():
-                docs.append(RawDocument(
-                    content=full_text,
-                    metadata={
-                        "source": path.name,
-                        "file_path": str(path),
-                        "loader": "docling",
-                        "file_type": "pdf",
-                    },
-                    source=path.name,
-                    doc_type="pdf",
-                ))
+                docs.append(
+                    RawDocument(
+                        content=full_text,
+                        metadata={
+                            "source": path.name,
+                            "file_path": str(path),
+                            "loader": "docling",
+                            "file_type": "pdf",
+                        },
+                        source=path.name,
+                        doc_type="pdf",
+                    )
+                )
         return docs
 
-    def _load_pdf_pymupdf(self, path: Path) -> List[RawDocument]:
+    def _load_pdf_pymupdf(self, path: Path) -> list[RawDocument]:
+        """Extract PDF text, tables, and page metadata using PyMuPDF."""
         import fitz  # PyMuPDF
 
         pdf = fitz.open(str(path))
@@ -143,19 +153,23 @@ class DocumentLoader:
                 "loader": "pymupdf",
                 "file_type": "pdf",
             }
-            docs.append(RawDocument(
-                content=combined.strip(),
-                metadata=metadata,
-                source=path.name,
-                page_num=page_num + 1,
-                doc_type="pdf",
-            ))
+            docs.append(
+                RawDocument(
+                    content=combined.strip(),
+                    metadata=metadata,
+                    source=path.name,
+                    page_num=page_num + 1,
+                    doc_type="pdf",
+                )
+            )
         pdf.close()
         return docs
 
-    def _load_docx(self, path: Path) -> List[RawDocument]:
+    def _load_docx(self, path: Path) -> list[RawDocument]:
+        """Extract Word document sections and heading metadata."""
         try:
             import docx
+
             document = docx.Document(str(path))
             sections = []
             current_section = []
@@ -178,39 +192,44 @@ class DocumentLoader:
             for i, (heading, content) in enumerate(sections):
                 if not content.strip():
                     continue
-                docs.append(RawDocument(
-                    content=f"{heading}\n\n{content}",
-                    metadata={
-                        "source": path.name,
-                        "file_path": str(path),
-                        "section": heading,
-                        "section_index": i,
-                        "loader": "python-docx",
-                        "file_type": "docx",
-                    },
-                    source=path.name,
-                    doc_type="docx",
-                ))
+                docs.append(
+                    RawDocument(
+                        content=f"{heading}\n\n{content}",
+                        metadata={
+                            "source": path.name,
+                            "file_path": str(path),
+                            "section": heading,
+                            "section_index": i,
+                            "loader": "python-docx",
+                            "file_type": "docx",
+                        },
+                        source=path.name,
+                        doc_type="docx",
+                    )
+                )
             return docs
         except Exception as e:
             logger.error(f"DOCX loading failed: {e}")
             return []
 
-    def _load_txt(self, path: Path) -> List[RawDocument]:
+    def _load_txt(self, path: Path) -> list[RawDocument]:
+        """Read a text file and attach source metadata."""
         try:
-            with open(str(path), "r", encoding="utf-8", errors="replace") as f:
+            with open(str(path), encoding="utf-8", errors="replace") as f:
                 content = f.read()
-            return [RawDocument(
-                content=content,
-                metadata={
-                    "source": path.name,
-                    "file_path": str(path),
-                    "loader": "text",
-                    "file_type": path.suffix.lstrip("."),
-                },
-                source=path.name,
-                doc_type="text",
-            )]
+            return [
+                RawDocument(
+                    content=content,
+                    metadata={
+                        "source": path.name,
+                        "file_path": str(path),
+                        "loader": "text",
+                        "file_type": path.suffix.lstrip("."),
+                    },
+                    source=path.name,
+                    doc_type="text",
+                )
+            ]
         except Exception as e:
             logger.error(f"Text loading failed: {e}")
             return []

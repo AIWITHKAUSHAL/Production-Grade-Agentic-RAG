@@ -1,5 +1,9 @@
-from fastapi import APIRouter
+"""Health components for the agentic RAG application."""
+
 from datetime import datetime
+
+from fastapi import APIRouter
+
 from ...core.config import get_settings
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -7,6 +11,7 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 @router.get("")
 async def health_check():
+    """Report API liveness and version information."""
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
@@ -16,21 +21,24 @@ async def health_check():
 
 @router.get("/components")
 async def components_health():
+    """Check configured storage services and model initialization."""
     settings = get_settings()
     results = {}
 
     # Qdrant
     try:
         from ...retrieval.vector_store import get_qdrant_client
+
         client = get_qdrant_client()
-        client.get_collections()
+        client.get_collection(settings.qdrant_collection)
         results["qdrant"] = "healthy"
     except Exception as e:
-        results["qdrant"] = f"unhealthy: {e}"
+        results["qdrant"] = f"unhealthy: {type(e).__name__}"
 
     # MongoDB
     try:
         from ...checkpoints.mongodb_saver import get_checkpoint_saver
+
         saver = get_checkpoint_saver()
         if saver:
             saver.client.server_info()
@@ -38,18 +46,23 @@ async def components_health():
         else:
             results["mongodb"] = "not configured"
     except Exception as e:
-        results["mongodb"] = f"unhealthy: {e}"
+        results["mongodb"] = f"unhealthy: {type(e).__name__}"
 
     # LLM
     try:
         from ...core.llm import get_openai_client
+
         client = get_openai_client()
         results["llm"] = "configured"
     except Exception as e:
         results["llm"] = f"unhealthy: {e}"
 
     return {
-        "status": "healthy" if all(v == "healthy" or v == "configured" or v == "not configured" for v in results.values()) else "degraded",
+        "status": "healthy"
+        if all(
+            v == "healthy" or v == "configured" or v == "not configured" for v in results.values()
+        )
+        else "degraded",
         "components": results,
         "timestamp": datetime.utcnow().isoformat(),
     }

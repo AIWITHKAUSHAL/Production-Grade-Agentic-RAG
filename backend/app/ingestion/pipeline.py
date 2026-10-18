@@ -1,13 +1,14 @@
-import os
-import logging
+"""Pipeline components for the agentic RAG application."""
+
 import hashlib
+import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-from langchain_core.documents import Document
-from .document_loader import DocumentLoader
-from .chunking import get_chunker, ChunkingStrategy
-from ..retrieval.vector_store import get_vector_store
+from typing import Any
+
 from ..retrieval.bm25_retriever import BM25Index
+from ..retrieval.vector_store import get_vector_store
+from .chunking import get_chunker
+from .document_loader import DocumentLoader
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class IngestionPipeline:
     """End-to-end document ingestion: load → chunk → embed → store."""
 
     def __init__(self):
+        """Initialize the IngestionPipeline dependencies and state."""
         self.loader = DocumentLoader()
         self.vector_store = None
         self.bm25_index = None
@@ -26,8 +28,9 @@ class IngestionPipeline:
         chunking_strategy: str = "recursive",
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
-        collection_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        collection_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Load, chunk, embed, and index a file for retrieval."""
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -68,17 +71,20 @@ class IngestionPipeline:
             "file_hash": file_hash,
         }
 
-    async def _get_vector_store(self, collection_name: Optional[str] = None):
+    async def _get_vector_store(self, collection_name: str | None = None):
+        """Initialize and return the pipeline vector store."""
         if self.vector_store is None:
             self.vector_store = await get_vector_store(collection_name)
         return self.vector_store
 
     async def _get_bm25_index(self) -> BM25Index:
+        """Initialize and return the pipeline keyword index."""
         if self.bm25_index is None:
             self.bm25_index = BM25Index()
         return self.bm25_index
 
     def _file_hash(self, path: Path) -> str:
+        """Compute a short SHA256 digest of a file."""
         h = hashlib.sha256()
         with open(path, "rb") as f:
             for chunk in iter(lambda: f.read(8192), b""):
@@ -86,10 +92,11 @@ class IngestionPipeline:
         return h.hexdigest()[:16]
 
 
-_pipeline: Optional[IngestionPipeline] = None
+_pipeline: IngestionPipeline | None = None
 
 
 def get_pipeline() -> IngestionPipeline:
+    """Return the shared document ingestion pipeline."""
     global _pipeline
     if _pipeline is None:
         _pipeline = IngestionPipeline()

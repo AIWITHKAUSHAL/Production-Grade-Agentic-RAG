@@ -1,12 +1,15 @@
-import os
-from openai import OpenAI, AsyncOpenAI
-from langchain_openai import ChatOpenAI
-from langchain_core.language_models import BaseChatModel
+"""Llm components for the agentic RAG application."""
+
 from functools import lru_cache
+
+from langchain_openai import ChatOpenAI
+from openai import AsyncOpenAI, OpenAI
+
 from .config import get_settings
 
 
 def get_openai_client() -> OpenAI:
+    """Create a synchronous client for the configured EURI API."""
     settings = get_settings()
     return OpenAI(
         api_key=settings.euri_api_key,
@@ -15,6 +18,7 @@ def get_openai_client() -> OpenAI:
 
 
 def get_async_openai_client() -> AsyncOpenAI:
+    """Create an asynchronous client for the configured EURI API."""
     settings = get_settings()
     return AsyncOpenAI(
         api_key=settings.euri_api_key,
@@ -22,8 +26,9 @@ def get_async_openai_client() -> AsyncOpenAI:
     )
 
 
-@lru_cache()
+@lru_cache
 def get_llm(temperature: float = 0.0, streaming: bool = False) -> ChatOpenAI:
+    """Return a cached chat model with the requested generation settings."""
     settings = get_settings()
     return ChatOpenAI(
         model=settings.euri_model,
@@ -36,6 +41,7 @@ def get_llm(temperature: float = 0.0, streaming: bool = False) -> ChatOpenAI:
 
 
 def get_grader_llm() -> ChatOpenAI:
+    """Create a deterministic chat model for grading."""
     settings = get_settings()
     return ChatOpenAI(
         model=settings.euri_model,
@@ -47,6 +53,7 @@ def get_grader_llm() -> ChatOpenAI:
 
 
 def get_streaming_llm() -> ChatOpenAI:
+    """Create a chat model that streams response tokens."""
     settings = get_settings()
     return ChatOpenAI(
         model=settings.euri_model,

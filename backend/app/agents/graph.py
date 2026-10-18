@@ -1,27 +1,32 @@
-import os
+"""Graph components for the agentic RAG application."""
+
 import logging
+import os
 from typing import Literal
-from langgraph.graph import StateGraph, END, START
-from .state import AgentState
-from .nodes import (
-    understand_query,
-    route_query,
-    retrieve,
-    web_search_node,
-    calculator_node,
-    grade_documents,
-    generate,
-    evaluate_generation,
-    rewrite_query,
-    final_answer,
-)
+
+from langgraph.graph import END, START, StateGraph
+
 from ..core.config import get_settings
+from .nodes import (
+    calculator_node,
+    evaluate_generation,
+    final_answer,
+    generate,
+    grade_documents,
+    retrieve,
+    rewrite_query,
+    route_query,
+    understand_query,
+    web_search_node,
+)
+from .state import AgentState
 
 logger = logging.getLogger(__name__)
 
 
 # ─── Conditional Edge: Route Decision ────────────────────────────────────────
 def decide_route(state: AgentState) -> Literal["retrieve", "web_search", "calculator", "generate"]:
+    """Select the next graph node from the routing decision."""
     route = state.get("route_decision", "vectorstore")
     if route == "calculator":
         return "calculator"
@@ -35,6 +40,7 @@ def decide_route(state: AgentState) -> Literal["retrieve", "web_search", "calcul
 
 # ─── Conditional Edge: After Grade Documents ─────────────────────────────────
 def decide_after_grade(state: AgentState) -> Literal["generate", "rewrite_query"]:
+    """Generate from relevant documents or rewrite the query."""
     docs = state.get("graded_documents", [])
     retry = state.get("retry_count", 0)
     settings = get_settings()
@@ -46,6 +52,7 @@ def decide_after_grade(state: AgentState) -> Literal["generate", "rewrite_query"
 
 # ─── Conditional Edge: After Evaluate ────────────────────────────────────────
 def decide_after_evaluate(state: AgentState) -> Literal["final_answer", "rewrite_query"]:
+    """Finish an acceptable answer or retry within the limit."""
     quality = state.get("generation_quality", "poor")
     retry = state.get("retry_count", 0)
     settings = get_settings()
@@ -57,6 +64,7 @@ def decide_after_evaluate(state: AgentState) -> Literal["final_answer", "rewrite
 
 # ─── Conditional Edge: After Rewrite ─────────────────────────────────────────
 def decide_after_rewrite(state: AgentState) -> Literal["retrieve", "web_search"]:
+    """Resume retrieval using the existing search route."""
     route = state.get("route_decision", "vectorstore")
     if route == "web_search":
         return "web_search"
@@ -160,12 +168,14 @@ _compiled_graph = None
 
 
 def get_graph():
+    """Return the compiled graph with the best available checkpointer."""
     global _compiled_graph
     if _compiled_graph is None:
         # Try MongoDB saver, fall back to in-memory, then no checkpointer
         checkpointer = None
         try:
             from ..checkpoints.mongodb_saver import get_checkpoint_saver
+
             checkpointer = get_checkpoint_saver()
         except Exception as e:
             logger.warning(f"MongoDB checkpointer unavailable: {e}")
@@ -173,6 +183,7 @@ def get_graph():
         if checkpointer is None:
             try:
                 from langgraph.checkpoint.memory import MemorySaver
+
                 checkpointer = MemorySaver()
                 logger.info("Using in-memory checkpointer")
             except Exception as e:

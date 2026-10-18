@@ -1,0 +1,47 @@
+Generated with built-in image_gen; revised to clarify feedback arrows.
+
+Use case: infographic-diagram.
+Create a polished classroom architecture diagram for this actual application: "AGENTIC RAG — COMPLETE APPLICATION FLOW". Deliver a wide 16:9 image, ideally 3840x2160. Crisp large typography, white/off-white background, navy headings, blue query flow, teal ingestion flow, amber correction loop, purple shared services. Flat professional diagram, subtle rounded panels, generous whitespace, orthogonal directional arrows, no decorative 3D. All text legible on a classroom projector. Number stages. Subtitle: "Upload knowledge → Retrieve evidence → Generate → Check → Respond".
+
+Layout: top horizontal teal lane (about 23% of height), central large blue query lane (about 55%), bottom shared-service strip and teaching legend. Keep concise labels rather than paragraphs.
+
+TOP LANE heading "A • PREPARE THE KNOWLEDGE"
+Flow left to right:
+"1  Upload documents" small sublabel "Browser → FastAPI upload API" and "PDF • DOCX • TXT • Markdown"
+→ "2  Extract text" sublabel "Docling / PyMuPDF • python-docx"
+→ "3  Split + add metadata" sublabel "Chunks • overlap • source • page • file hash"
+→ split into two clearly separated destinations:
+"EURI embeddings → Qdrant Cloud" with sublabel "Semantic vector index"
+and "Tokenize → BM25 index" with sublabel "In-memory keyword index".
+These two indexes feed the hybrid retrieval node below with teal dashed arrows. Depict intended index flow as a logical architecture overview.
+
+MAIN LANE heading "B • ANSWER A QUESTION  |  LangGraph orchestration"
+Main left-to-right chain:
+"4  Ask a question" sublabel "Browser chat → FastAPI /query" →
+"5  Understand + route" sublabel "Intent + Self-RAG: retrieve?"
+Branch router into four paths in a neat central retrieval/tool panel:
+main prominent "6  Hybrid retrieval" internal small flow: "Qdrant semantic + BM25 keyword" → "Weighted RRF fusion" → "Cross-encoder rerank".
+second "Web search" sublabel "Tavily / DuckDuckGo"
+third "Direct LLM" sublabel "General / creative"
+fourth "Calculator" sublabel "Math".
+Hybrid retrieval and Web search go to "7  Grade evidence" sublabel "CRAG + Self-RAG IsREL".
+From evidence grading show amber small correction callout "Weak evidence? Add web results" connected to web search as a supplement, then use graded evidence.
+Grade → "8  Generate" sublabel "EURI LLM • context + citations".
+Direct LLM goes straight to Generate, bypassing evidence grading.
+Generate → "9  Evaluate" sublabel "Grounding • relevance • IsSUP • IsUSE".
+Evaluate → "10  Final response" sublabel "Answer • sources • scores • execution steps", with tiny caption "FastAPI → browser | JSON / SSE".
+Calculator goes straight to Final response via a distinct thin bypass arrow, bypassing Generate and Evaluate.
+
+Below the main row but above the service strip draw clearly visible amber feedback loop:
+Evidence grading when "No evidence" and Evaluation when "Poor answer" → "Rewrite query" → back to Hybrid retrieval or Web search (keep web route for web queries). Label "Retry up to configured limit (default: 3)".
+On Evaluate to Final response arrow label "Good quality OR retry limit reached". Do not imply every answer is validated or guaranteed correct.
+
+BOTTOM STRIP heading "SHARED SERVICES"
+three horizontal compact cards:
+"EURI API — LLM reasoning, grading & embeddings"
+"MongoDB — session checkpoints / history (memory fallback)"
+"LangSmith — optional execution tracing"
+Dotted subtle associations to orchestration, avoid spaghetti.
+Small footer teaching key: "RRF = Reciprocal Rank Fusion   •   CRAG = Corrective RAG   •   Self-RAG = retrieve, assess relevance, support and usefulness".
+Tiny legend "Teal: ingestion   Blue: question flow   Amber: correction   Purple: services".
+Prioritize correct arrow topology, no invented components, no Redis, no authentication, no training pipeline. This is one coherent whole-application educational diagram, not a website screenshot.

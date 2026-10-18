@@ -187,3 +187,10 @@ Set `LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY` to enable full LangSmith
 ## License
 
 MIT
+
+### Linting and formatting
+
+Install the development tools with `venv/bin/python -m pip install -r requirements-dev.txt`.
+Run `venv/bin/python -m ruff check .` for lint and missing-docstring checks, and
+`venv/bin/python -m ruff format --check .` to check formatting. Use
+`venv/bin/python -m ruff format .` to apply formatting.

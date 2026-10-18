@@ -1,0 +1,17 @@
+Create a polished 16:9 classroom teaching infographic with high resolution, white background, dark navy typography, teal evidence, blue answer checks, amber correction. Title "CRAG & SELF-RAG — DEFINITIONS WITH EXAMPLES". Subtitle "One example across the pipeline: What is the refund period?"
+Top slim evidence banner: "Uploaded policy.pdf, page 2: Customers may request a refund within 30 days of purchase." Clearly label this as an illustrative example.
+
+Main 2-column grid of 6 roomy cards with readable large text:
+1 "RETRIEVAL + HYBRID SEARCH" definition "Find useful passages before answering." Example "BM25 matches refund; vector search matches money back. Weighted RRF merges ranks; a cross-encoder reranks query–passage pairs." File footer "retrieval/hybrid_search.py • rrf.py • reranker.py"
+2 "CRAG — CORRECTIVE RAG" definition "Grade retrieved evidence and correct weak retrieval." Example "3 of 5 relevant → use docs. 1 of 5 → add web evidence. 0 of 5 → web fallback." File footer "rag/crag.py → nodes.py: grade_documents()". Small note "Relevant ratio: ≥0.6 use • ≥0.2 hybrid • <0.2 web"
+3 "IsRET + IsREL" definition "IsRET: should we retrieve? IsREL: does this passage help?" Example "Policy question → retrieve. Refund passage → relevant. Shipping-only passage → irrelevant." File footer "rag/self_rag.py → should_retrieve(), is_relevant()". Tiny note "IsRET is the teaching label for the retrieval decision."
+4 "GROUNDING / IsSUP — SUPPORTED?" definition "Do the evidence passages support the answer's claims?" Example "Answer: 30 days → supported. Answer: 60 days → unsupported." File footer "rag/grader.py: HallucinationGrader • self_rag.py: is_supported()". Tiny note "hallucination_score is a support score: higher means more grounded."
+5 "ANSWER RELEVANCE" definition "Does the answer address the question?" Example "30 days → answers the question. Refunds go to the original payment method → may be grounded, but misses the period." File footer "rag/grader.py: AnswerRelevanceGrader"
+6 "IsUSE — USEFUL?" definition "How helpful and actionable is the answer? LLM rating: 1–5." Example "You have 30 days from purchase [policy.pdf, p.2] → high usefulness. Read the policy → low usefulness." File footer "rag/self_rag.py: is_useful()"
+
+Bottom amber/blue decision band heading "HOW THIS CODE DECIDES":
+"Good = grounded AND relevant AND utility ≥ 3" in prominent text.
+"Poor answer / missing evidence → rewrite query → retrieve again (default: 3 retries). Good OR retry limit reached → final answer."
+Small accurate implementation note "IsSUP score is recorded; its separate boolean does not gate quality. These checks are LLM judgments, not proof."
+Bottom footer small note "Chunk = a short document passage • Embedding = numeric meaning vector • Checkpoint = saved graph execution state".
+No crowded tiny paragraphs. Correct spelling, clear teaching hierarchy.

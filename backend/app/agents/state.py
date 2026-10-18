@@ -1,21 +1,26 @@
-from typing import TypedDict, List, Optional, Dict, Any, Annotated
-from langchain_core.documents import Document
+"""State components for the agentic RAG application."""
+
 import operator
+from typing import Annotated, Any, TypedDict
+
+from langchain_core.documents import Document
 
 
 class AgentState(TypedDict):
     # Core query
+    """Shared graph state for retrieval, generation, and evaluation."""
+
     query: str
-    rewritten_query: Optional[str]
+    rewritten_query: str | None
 
     # Retrieval
-    documents: List[Document]
-    graded_documents: List[Document]
-    web_search_results: List[Document]
+    documents: list[Document]
+    graded_documents: list[Document]
+    web_search_results: list[Document]
 
     # Generation
-    generation: Optional[str]
-    sources: List[str]
+    generation: str | None
+    sources: list[str]
 
     # Grading scores
     hallucination_score: float
@@ -24,10 +29,10 @@ class AgentState(TypedDict):
 
     # Control flow
     retry_count: int
-    route_decision: str           # "vectorstore" | "web_search" | "general" | "calculator"
-    crag_decision: str            # "use" | "web_search" | "hybrid"
+    route_decision: str  # "vectorstore" | "web_search" | "general" | "calculator"
+    crag_decision: str  # "use" | "web_search" | "hybrid"
     should_retrieve: bool
-    generation_quality: str       # "good" | "poor"
+    generation_quality: str  # "good" | "poor"
 
     # Self-RAG reflection tokens
     self_rag_isrel: bool
@@ -35,15 +40,15 @@ class AgentState(TypedDict):
     self_rag_isuse: int
 
     # Final answer
-    final_answer: Optional[str]
-    error: Optional[str]
+    final_answer: str | None
+    error: str | None
 
     # Tool results
-    calculator_result: Optional[str]
+    calculator_result: str | None
 
     # Execution trace (for UI)
-    steps: Annotated[List[Dict[str, Any]], operator.add]
+    steps: Annotated[list[dict[str, Any]], operator.add]
 
     # Metadata
-    metadata: Dict[str, Any]
-    session_id: Optional[str]
+    metadata: dict[str, Any]
+    session_id: str | None

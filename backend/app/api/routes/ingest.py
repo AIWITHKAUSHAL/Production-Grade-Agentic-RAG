@@ -1,10 +1,11 @@
-import os
+"""Ingest components for the agentic RAG application."""
+
 import logging
 from pathlib import Path
-from typing import Optional
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
+
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
+
 from ...core.config import get_settings
 from ...ingestion.pipeline import get_pipeline
 
@@ -13,6 +14,8 @@ router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
 
 class IngestResponse(BaseModel):
+    """Summary of a completed document ingestion."""
+
     file: str
     chunks: int
     pages: int
@@ -29,6 +32,7 @@ async def upload_and_ingest(
     chunk_overlap: int = Form(200),
     background_tasks: BackgroundTasks = None,
 ):
+    """Validate an uploaded file and ingest its contents."""
     settings = get_settings()
     max_size = settings.max_upload_size_mb * 1024 * 1024
 
@@ -68,20 +72,39 @@ async def upload_and_ingest(
 
 @router.get("/strategies")
 async def list_chunking_strategies():
+    """List the document splitting methods available to uploads."""
     return {
         "strategies": [
-            {"id": "recursive", "name": "Recursive (Recommended)", "description": "Splits on hierarchy of separators"},
-            {"id": "semantic", "name": "Semantic", "description": "Splits on semantic meaning boundaries"},
+            {
+                "id": "recursive",
+                "name": "Recursive (Recommended)",
+                "description": "Splits on hierarchy of separators",
+            },
+            {
+                "id": "semantic",
+                "name": "Semantic",
+                "description": "Splits on semantic meaning boundaries",
+            },
             {"id": "sentence", "name": "Sentence", "description": "Splits at sentence boundaries"},
-            {"id": "fixed_size", "name": "Fixed Size", "description": "Fixed character count chunks"},
+            {
+                "id": "fixed_size",
+                "name": "Fixed Size",
+                "description": "Fixed character count chunks",
+            },
             {"id": "markdown", "name": "Markdown", "description": "Splits on markdown headers"},
-            {"id": "paragraph", "name": "Paragraph", "description": "Splits on paragraph boundaries"},
+            {
+                "id": "paragraph",
+                "name": "Paragraph",
+                "description": "Splits on paragraph boundaries",
+            },
         ]
     }
 
 
 @router.get("/status")
 async def ingest_status():
+    """Report the number of documents in the keyword index."""
     from ...retrieval.bm25_retriever import get_bm25_index
+
     bm25 = get_bm25_index()
     return {"bm25_doc_count": bm25.doc_count, "status": "ready"}

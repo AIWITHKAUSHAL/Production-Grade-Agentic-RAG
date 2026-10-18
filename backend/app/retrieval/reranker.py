@@ -1,7 +1,10 @@
+"""Reranker components for the agentic RAG application."""
+
 import logging
-from typing import List, Tuple, Optional
+
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
+
 from ..core.llm import get_grader_llm
 
 logger = logging.getLogger(__name__)
@@ -10,10 +13,12 @@ _cross_encoder = None
 
 
 def get_cross_encoder():
+    """Load and cache the local cross encoder when available."""
     global _cross_encoder
     if _cross_encoder is None:
         try:
             from sentence_transformers import CrossEncoder
+
             _cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
         except Exception as e:
             logger.warning(f"Cross-encoder unavailable: {e}")
@@ -23,7 +28,8 @@ def get_cross_encoder():
 class CrossEncoderReranker:
     """Rerank with a local cross-encoder model."""
 
-    def rerank(self, query: str, documents: List[Document], top_k: int = 3) -> List[Document]:
+    def rerank(self, query: str, documents: list[Document], top_k: int = 3) -> list[Document]:
+        """Rank documents with the local cross encoder."""
         ce = get_cross_encoder()
         if ce is None or not documents:
             return documents[:top_k]
@@ -36,7 +42,7 @@ class CrossEncoderReranker:
             for doc, score in scored[:top_k]:
                 enriched = Document(
                     page_content=doc.page_content,
-                    metadata={**doc.metadata, "cross_encoder_score": float(score)}
+                    metadata={**doc.metadata, "cross_encoder_score": float(score)},
                 )
                 result.append(enriched)
             return result
@@ -48,29 +54,39 @@ class CrossEncoderReranker:
 class LLMReranker:
     """Rerank documents using the LLM for relevance scoring."""
 
-    RERANK_PROMPT = ChatPromptTemplate.from_messages([
-        ("system", """You are a relevance scorer. Given a query and a document excerpt,
+    RERANK_PROMPT = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                """You are a relevance scorer. Given a query and a document excerpt,
 score the relevance from 0 to 10 (10 = highly relevant, 0 = irrelevant).
-Return only a JSON object: {{"score": <number>, "reason": "<brief reason>"}}"""),
-        ("human", "Query: {query}\n\nDocument: {document}\n\nRelevance score (0-10):"),
-    ])
+Return only a JSON object: {{"score": <number>, "reason": "<brief reason>"}}""",
+            ),
+            ("human", "Query: {query}\n\nDocument: {document}\n\nRelevance score (0-10):"),
+        ]
+    )
 
     def __init__(self):
+        """Initialize the LLMReranker dependencies and state."""
         self.llm = get_grader_llm()
 
-    async def rerank(self, query: str, documents: List[Document], top_k: int = 3) -> List[Document]:
+    async def rerank(self, query: str, documents: list[Document], top_k: int = 3) -> list[Document]:
+        """Rank documents by concurrent LLM relevance scores."""
         if not documents:
             return []
-        import json
         import asyncio
+        import json
 
-        async def score_doc(doc: Document) -> Tuple[Document, float]:
+        async def score_doc(doc: Document) -> tuple[Document, float]:
+            """Score one document and attach the relevance explanation."""
             try:
                 chain = self.RERANK_PROMPT | self.llm
-                result = await chain.ainvoke({
-                    "query": query,
-                    "document": doc.page_content[:500],
-                })
+                result = await chain.ainvoke(
+                    {
+                        "query": query,
+                        "document": doc.page_content[:500],
+                    }
+                )
                 text = result.content.strip()
                 # Extract JSON
                 start = text.find("{")
@@ -84,7 +100,11 @@ Return only a JSON object: {{"score": <number>, "reason": "<brief reason>"}}""")
                     reason = ""
                 enriched = Document(
                     page_content=doc.page_content,
-                    metadata={**doc.metadata, "llm_rerank_score": score, "llm_rerank_reason": reason}
+                    metadata={
+                        **doc.metadata,
+                        "llm_rerank_score": score,
+                        "llm_rerank_reason": reason,
+                    },
                 )
                 return enriched, score
             except Exception:
@@ -97,6 +117,7 @@ Return only a JSON object: {{"score": <number>, "reason": "<brief reason>"}}""")
 
 
 def get_reranker(method: str = "cross_encoder") -> "CrossEncoderReranker | LLMReranker":
+    """Create a local or LLM document reranker."""
     if method == "llm":
         return LLMReranker()
     return CrossEncoderReranker()

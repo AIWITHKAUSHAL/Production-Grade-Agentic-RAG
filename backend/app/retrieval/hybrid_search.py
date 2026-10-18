@@ -1,10 +1,13 @@
+"""Hybrid search components for the agentic RAG application."""
+
 import logging
-from typing import List, Optional
+
 from langchain_core.documents import Document
-from .vector_store import similarity_search_with_score
+
 from .bm25_retriever import get_bm25_index
-from .rrf import reciprocal_rank_fusion
 from .reranker import CrossEncoderReranker
+from .rrf import reciprocal_rank_fusion
+from .vector_store import similarity_search_with_score
 
 logger = logging.getLogger(__name__)
 
@@ -15,15 +18,16 @@ class HybridSearcher:
     with Reciprocal Rank Fusion and optional cross-encoder reranking.
     """
 
-    def __init__(self, alpha: float = 0.5, k: int = 5, rerank: bool = True,
-                 rerank_top_k: int = 3):
-        self.alpha = alpha       # 0=pure BM25, 1=pure semantic
+    def __init__(self, alpha: float = 0.5, k: int = 5, rerank: bool = True, rerank_top_k: int = 3):
+        """Initialize the HybridSearcher dependencies and state."""
+        self.alpha = alpha  # 0=pure BM25, 1=pure semantic
         self.k = k
         self.rerank = rerank
         self.rerank_top_k = rerank_top_k
         self._reranker = CrossEncoderReranker() if rerank else None
 
-    async def search(self, query: str, filter_metadata: Optional[dict] = None) -> List[Document]:
+    async def search(self, query: str, filter_metadata: dict | None = None) -> list[Document]:
+        """Fuse semantic and keyword matches, then optionally rerank."""
         fetch_k = max(self.k * 2, 10)
 
         # Semantic search
@@ -33,7 +37,7 @@ class HybridSearcher:
             semantic_docs = [
                 Document(
                     page_content=doc.page_content,
-                    metadata={**doc.metadata, "semantic_score": round(float(score), 4)}
+                    metadata={**doc.metadata, "semantic_score": round(float(score), 4)},
                 )
                 for doc, score in results
             ]
@@ -71,16 +75,18 @@ class HybridSearcher:
         if self.rerank and self._reranker and candidates:
             candidates = self._reranker.rerank(query, candidates, top_k=self.rerank_top_k)
         else:
-            candidates = candidates[:self.k]
+            candidates = candidates[: self.k]
 
         return candidates
 
 
-_searcher: Optional[HybridSearcher] = None
+_searcher: HybridSearcher | None = None
 
 
-def get_hybrid_searcher(alpha: float = 0.5, k: int = 5,
-                        rerank: bool = True, rerank_top_k: int = 3) -> HybridSearcher:
+def get_hybrid_searcher(
+    alpha: float = 0.5, k: int = 5, rerank: bool = True, rerank_top_k: int = 3
+) -> HybridSearcher:
+    """Return the shared hybrid retrieval service."""
     global _searcher
     if _searcher is None:
         _searcher = HybridSearcher(alpha=alpha, k=k, rerank=rerank, rerank_top_k=rerank_top_k)

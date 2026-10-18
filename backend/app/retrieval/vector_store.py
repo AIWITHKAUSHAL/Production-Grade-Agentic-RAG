@@ -1,20 +1,24 @@
+"""Vector store components for the agentic RAG application."""
+
 import logging
-from typing import List, Optional, Any
+
 from langchain_core.documents import Document
-from langchain_community.vectorstores import Qdrant as LangchainQdrant
-from qdrant_client import QdrantClient, AsyncQdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client import AsyncQdrantClient, QdrantClient
+from qdrant_client.models import Distance, VectorParams
+
 from ..core.config import get_settings
 from ..core.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
-_qdrant_client: Optional[QdrantClient] = None
-_async_qdrant_client: Optional[AsyncQdrantClient] = None
-_vector_store: Optional[LangchainQdrant] = None
+_qdrant_client: QdrantClient | None = None
+_async_qdrant_client: AsyncQdrantClient | None = None
+_vector_store: QdrantVectorStore | None = None
 
 
 def get_qdrant_client() -> QdrantClient:
+    """Initialize and return the shared Qdrant client."""
     global _qdrant_client
     if _qdrant_client is None:
         settings = get_settings()
@@ -26,7 +30,8 @@ def get_qdrant_client() -> QdrantClient:
     return _qdrant_client
 
 
-async def get_vector_store(collection_name: Optional[str] = None) -> LangchainQdrant:
+async def get_vector_store(collection_name: str | None = None) -> QdrantVectorStore:
+    """Open the requested Qdrant collection with project embeddings."""
     global _vector_store
     settings = get_settings()
     coll = collection_name or settings.qdrant_collection
@@ -35,10 +40,10 @@ async def get_vector_store(collection_name: Optional[str] = None) -> LangchainQd
     client = get_qdrant_client()
     _ensure_collection(client, coll, vector_size=1536)
 
-    _vector_store = LangchainQdrant(
+    _vector_store = QdrantVectorStore(
         client=client,
         collection_name=coll,
-        embeddings=embeddings,
+        embedding=embeddings,
         content_payload_key="content",
         metadata_payload_key="metadata",
     )
@@ -46,10 +51,10 @@ async def get_vector_store(collection_name: Optional[str] = None) -> LangchainQd
 
 
 def _ensure_collection(client: QdrantClient, collection_name: str, vector_size: int = 1536):
-    try:
-        client.get_collection(collection_name)
+    """Create a missing collection with the configured vector shape."""
+    if client.collection_exists(collection_name):
         logger.info(f"Collection '{collection_name}' already exists")
-    except Exception:
+    else:
         logger.info(f"Creating collection '{collection_name}'")
         client.create_collection(
             collection_name=collection_name,
@@ -57,16 +62,20 @@ def _ensure_collection(client: QdrantClient, collection_name: str, vector_size: 
         )
 
 
-def get_retriever(k: int = 5, collection_name: Optional[str] = None):
+def get_retriever(k: int = 5, collection_name: str | None = None):
+    """Build a similarity retriever for the requested collection."""
     import asyncio
+
     loop = asyncio.new_event_loop()
     vs = loop.run_until_complete(get_vector_store(collection_name))
     loop.close()
     return vs.as_retriever(search_type="similarity", search_kwargs={"k": k})
 
 
-async def similarity_search(query: str, k: int = 5,
-                            filter_metadata: Optional[dict] = None) -> List[Document]:
+async def similarity_search(
+    query: str, k: int = 5, filter_metadata: dict | None = None
+) -> list[Document]:
+    """Retrieve similar documents with an optional metadata filter."""
     vs = await get_vector_store()
     kwargs = {"k": k}
     if filter_metadata:
@@ -74,6 +83,7 @@ async def similarity_search(query: str, k: int = 5,
     return await vs.asimilarity_search(query, **kwargs)
 
 
-async def similarity_search_with_score(query: str, k: int = 5) -> List[tuple[Document, float]]:
+async def similarity_search_with_score(query: str, k: int = 5) -> list[tuple[Document, float]]:
+    """Retrieve similar documents with their vector scores."""
     vs = await get_vector_store()
     return await vs.asimilarity_search_with_score(query, k=k)
